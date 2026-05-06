@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vtk-index"
+version = "1.0.0"
+description = "Chunking, embedding, and hybrid retrieval for the VTK knowledge artifact"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Patrick O'Leary"}
+]
+keywords = ["vtk", "index", "retrieval", "visualization", "search", "qdrant"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "qdrant-client>=1.7.0",
+    "sentence-transformers>=2.2.0",
+    "fastembed>=0.2.0",
+    "pydantic>=2.0.0",
+    "vtk-knowledge>=1.0.0",
+    "typer>=0.12.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/patrickoleary/vtk-rag"
+Repository = "https://github.com/patrickoleary/vtk-rag"
+Documentation = "https://github.com/patrickoleary/vtk-rag#readme"
+
+[project.scripts]
+vtk-index = "vtk_index.build.cli:app"
+vtk-rag = "vtk_rag.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src", "."]
+include = ["vtk_index*", "vtk_rag*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["vtk_rag"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["vtk_rag"]
