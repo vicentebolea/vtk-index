@@ -42,14 +42,48 @@ class Retriever:
     def __init__(
         self,
         qdrant_url: str = ":memory:",
+        qdrant_path: str | None = None,
         vtk_version: str = "",
         dense_model: str = DenseEmbedder.DEFAULT_MODEL,
         sparse_model: str = SparseEmbedder.DEFAULT_MODEL,
     ) -> None:
-        self.client = QdrantClient(qdrant_url)
+        self.client = (
+            QdrantClient(path=qdrant_path) if qdrant_path is not None else QdrantClient(qdrant_url)
+        )
         self.vtk_version = vtk_version
         self.dense = DenseEmbedder(dense_model)
         self.sparse = SparseEmbedder(sparse_model)
+
+    @classmethod
+    def from_artifact(
+        cls,
+        vtk_version: str,
+        repository: str = "vicentebolea/vtk-index",
+        dense_model: str = DenseEmbedder.DEFAULT_MODEL,
+        sparse_model: str = SparseEmbedder.DEFAULT_MODEL,
+    ) -> Retriever:
+        """Return a Retriever backed by the pre-built embedded storage for *vtk_version*.
+
+        Downloads from ``ghcr.io/{repository}:{vtk_version}-embedded`` on first call;
+        subsequent calls return immediately from the local cache at
+        ``~/.cache/vtk-index/storage-{vtk_version}/``.
+
+        No Qdrant server or embedding step required.
+
+        Example::
+
+            retriever = Retriever.from_artifact("9.6.1")
+            chunks = retriever.search_docs("sphere source")
+        """
+        from ..artifact.fetcher import fetch_embedded_storage
+
+        storage_path = fetch_embedded_storage(vtk_version, repository=repository)
+        return cls(
+            qdrant_path=str(storage_path),
+            vtk_version=vtk_version,
+            dense_model=dense_model,
+            sparse_model=sparse_model,
+        )
 
     def search_docs(
         self,

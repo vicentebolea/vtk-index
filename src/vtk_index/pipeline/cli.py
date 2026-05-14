@@ -64,8 +64,13 @@ def index(
     doc_chunks: Path = typer.Option(Path("doc-chunks.jsonl"), "--doc-chunks"),
     code_chunks: Path = typer.Option(Path("code-chunks.jsonl"), "--code-chunks"),
     qdrant_url: str = typer.Option(":memory:", "--qdrant-url"),
+    storage_path: Path = typer.Option(
+        None,
+        "--path",
+        help="Write to a local embedded Qdrant storage directory instead of a server.",
+    ),
 ) -> None:
-    """Embed chunks and upload to Qdrant."""
+    """Embed chunks and upload to Qdrant (server or local embedded storage)."""
     try:
         from qdrant_client import QdrantClient
         from qdrant_client.models import PointStruct, SparseVector
@@ -77,7 +82,11 @@ def index(
         raise typer.Exit(1)
 
     try:
-        client = QdrantClient(qdrant_url)
+        if storage_path is not None:
+            storage_path.mkdir(parents=True, exist_ok=True)
+            client = QdrantClient(path=str(storage_path))
+        else:
+            client = QdrantClient(qdrant_url)
         dense = DenseEmbedder()
         sparse = SparseEmbedder()
 
@@ -89,33 +98,34 @@ def index(
                 typer.echo(f"Skipping {chunk_file} (not found)", err=True)
                 continue
 
-            chunks = []
+            raw_chunks = []
             with open(chunk_file) as f:
                 for line in f:
                     if line.strip():
-                        chunks.append(json.loads(line))
+                        raw_chunks.append(json.loads(line))
 
             _ensure_collection(client, collection)
+            typer.echo(f"Embedding {len(raw_chunks)} chunks for {collection} ...")
 
-            points = []
-            for i, c in enumerate(chunks):
-                content = c.get("content", "")
-                dense_vec = dense.encode(content)
-                sparse_emb = sparse.embed(content)
-                points.append(
-                    PointStruct(
-                        id=i,
-                        vector={
-                            "content": dense_vec,
-                            "bm25": SparseVector(
-                                indices=sparse_emb.indices.tolist(),
-                                values=sparse_emb.values.tolist(),
-                            ),
-                        },
-                        payload=c,
-                    )
+            contents = [c.get("content", "") for c in raw_chunks]
+            dense_vecs = dense.encode_batch(contents)
+            sparse_embs = sparse.embed_batch(contents)
+            points = [
+                PointStruct(
+                    id=i,
+                    vector={
+                        "content": dv,
+                        "bm25": SparseVector(
+                            indices=se.indices.tolist(),
+                            values=se.values.tolist(),
+                        ),
+                    },
+                    payload=c,
                 )
-
+                for i, (c, dv, se) in enumerate(
+                    zip(raw_chunks, dense_vecs, sparse_embs, strict=False)
+                )
+            ]
             _upsert_batched(client, collection, points)
             typer.echo(f"Indexed {len(points)} chunks into {collection}")
     except Exception as e:
@@ -250,11 +260,21 @@ def _run_index(doc_chunks_path: str, code_chunks_path: str, qdrant_url: str) -> 
 @app.command()
 def search(
     query: str = typer.Argument(..., help="Search query string."),
+    vtk_version: str = typer.Option(
+        "",
+        "--vtk-version",
+        help="VTK version to auto-download the embedded storage for, e.g. 9.6.1. "
+        "Downloads on first call; cached in ~/.cache/vtk-index/.",
+    ),
     chunks_file: Path = typer.Option(
         None,
         "--chunks",
-        help="doc-chunks JSONL to load into memory before searching. "
-        "Required when --qdrant-url is :memory: (the default).",
+        help="doc-chunks JSONL to embed and load into memory before searching.",
+    ),
+    storage: Path = typer.Option(
+        None,
+        "--storage",
+        help="Pre-built embedded Qdrant storage directory (instant, no embedding needed).",
     ),
     qdrant_url: str = typer.Option(":memory:", "--qdrant-url"),
     collection: str = typer.Option("docs", "--collection", "-c", help="docs or code."),
@@ -265,9 +285,10 @@ def search(
 ) -> None:
     """Search the Qdrant index with a hybrid dense+BM25 query.
 
-    With the default in-memory Qdrant, pass --chunks to load a doc-chunks JSONL
-    file before searching. With a persistent server, omit --chunks and point
-    --qdrant-url at the running instance.
+    Three backends (pick one):
+      --storage   pre-built embedded storage, instant, no ML models needed
+      --chunks    raw JSONL, embeds on the fly (slower, requires ML models)
+      --qdrant-url  running Qdrant server
     """
     import contextlib
     import io
@@ -292,8 +313,21 @@ def search(
     try:
         col = "vtk_docs" if collection == "docs" else "vtk_code"
 
-        with contextlib.redirect_stderr(io.StringIO()):
-            retriever = Retriever(qdrant_url=qdrant_url)
+        if vtk_version and storage is None and chunks_file is None:
+            from ..artifact.fetcher import fetch_embedded_storage
+
+            typer.echo(f"Fetching embedded storage for VTK {vtk_version} ...", err=True)
+            storage = fetch_embedded_storage(vtk_version)
+
+        if storage is not None:
+            if not storage.exists():
+                typer.echo(f"Error: storage directory not found: {storage}", err=True)
+                raise typer.Exit(1)
+            with contextlib.redirect_stderr(io.StringIO()):
+                retriever = Retriever(qdrant_path=str(storage))
+        else:
+            with contextlib.redirect_stderr(io.StringIO()):
+                retriever = Retriever(qdrant_url=qdrant_url)
 
         if chunks_file is not None:
             if not chunks_file.exists():
@@ -362,18 +396,36 @@ def download(
     repository: str = typer.Option(
         "vicentebolea/vtk-index", "--repository", "-r", help="ghcr.io repository (owner/name)."
     ),
+    embedded: bool = typer.Option(
+        False,
+        "--embedded",
+        help="Download the pre-built embedded Qdrant storage instead of doc-chunks JSONL. "
+        "Use with: vtk-index search --storage <path>",
+    ),
 ) -> None:
-    """Download a pre-built doc-chunks artifact from ghcr.io (no Qdrant or VTK needed)."""
+    """Download a pre-built artifact from ghcr.io (no Qdrant or VTK needed).
+
+    Without --embedded: downloads doc-chunks JSONL (use with search --chunks).
+    With    --embedded: downloads pre-built Qdrant storage (use with search --storage,
+                        instant queries, no embedding step required).
+    """
     try:
-        from ..artifact.fetcher import fetch_from_ghcr
+        from ..artifact.fetcher import fetch_embedded_storage, fetch_from_ghcr
     except ImportError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
-        cache_path = fetch_from_ghcr(vtk_version, repository=repository, cache_dir=output_dir)
-        typer.echo(f"Downloaded doc-chunks to {cache_path}")
+        if embedded:
+            storage_path = fetch_embedded_storage(
+                vtk_version, repository=repository, cache_dir=output_dir
+            )
+            typer.echo(f"Downloaded embedded storage to {storage_path}")
+            typer.echo(f"Search with: vtk-index search --storage {storage_path} <query>")
+        else:
+            cache_path = fetch_from_ghcr(vtk_version, repository=repository, cache_dir=output_dir)
+            typer.echo(f"Downloaded doc-chunks to {cache_path}")
     except RuntimeError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)

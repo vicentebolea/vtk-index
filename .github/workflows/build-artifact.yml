@@ -39,23 +39,44 @@ jobs:
             artifacts/vtk-knowledge-${{ inputs.vtk_version }}.jsonl \
             --output-dir artifacts/
 
+      - name: Build embedded Qdrant storage
+        run: |
+          .venv/bin/vtk-index index \
+            --doc-chunks artifacts/doc-chunks.jsonl \
+            --path artifacts/storage/
+
       - name: Log in to GitHub Container Registry
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io \
             --username "${{ github.actor }}" \
             --password-stdin
 
-      - name: Build and push scratch image
+      - name: Build and push doc-chunks image
         env:
           REPO: ${{ github.repository }}
           VERSION: ${{ inputs.vtk_version }}
         run: |
           image="ghcr.io/$(echo "$REPO" | tr '[:upper:]' '[:lower:]')"
-          printf 'FROM scratch\nCOPY artifacts/doc-chunks.jsonl /doc-chunks.jsonl\n' > Dockerfile.artifact
-          podman build -f Dockerfile.artifact \
+          printf 'FROM scratch\nCOPY artifacts/doc-chunks.jsonl /doc-chunks.jsonl\n' > Dockerfile.chunks
+          podman build -f Dockerfile.chunks \
             -t "$image:$VERSION" \
             -t "$image:latest" \
             .
           podman push "$image:$VERSION"
           podman push "$image:latest"
           echo "Pushed $image:$VERSION and $image:latest"
+
+      - name: Build and push embedded storage image
+        env:
+          REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.vtk_version }}
+        run: |
+          image="ghcr.io/$(echo "$REPO" | tr '[:upper:]' '[:lower:]')"
+          printf 'FROM scratch\nCOPY artifacts/storage/ /\n' > Dockerfile.embedded
+          podman build -f Dockerfile.embedded \
+            -t "$image:$VERSION-embedded" \
+            -t "$image:latest-embedded" \
+            .
+          podman push "$image:$VERSION-embedded"
+          podman push "$image:latest-embedded"
+          echo "Pushed $image:$VERSION-embedded and $image:latest-embedded"
