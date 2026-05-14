@@ -21,7 +21,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
 
 
 @app.command()
@@ -116,7 +116,7 @@ def index(
                     )
                 )
 
-            client.upsert(collection_name=collection, points=points)
+            _upsert_batched(client, collection, points)
             typer.echo(f"Indexed {len(points)} chunks into {collection}")
     except Exception as e:
         typer.echo(f"Error: {e}", err=True)
@@ -182,6 +182,14 @@ def build(
         raise typer.Exit(1)
 
 
+_UPSERT_BATCH = 512
+
+
+def _upsert_batched(client, collection: str, points: list) -> None:
+    for start in range(0, len(points), _UPSERT_BATCH):
+        client.upsert(collection_name=collection, points=points[start : start + _UPSERT_BATCH])
+
+
 def _ensure_collection(client, collection: str) -> None:
     from qdrant_client.models import (
         Distance,
@@ -236,7 +244,69 @@ def _run_index(doc_chunks_path: str, code_chunks_path: str, qdrant_url: str) -> 
                     payload=c,
                 )
             )
-        client.upsert(collection_name=collection, points=points)
+        _upsert_batched(client, collection, points)
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="Search query string."),
+    qdrant_url: str = typer.Option("http://localhost:6333", "--qdrant-url"),
+    collection: str = typer.Option("docs", "--collection", "-c", help="docs or code."),
+    top: int = typer.Option(10, "--top", "-n", help="Number of results."),
+    role: str = typer.Option("", "--role", help="Filter by role (source, filter, mapper, ...)."),
+    min_visibility: float = typer.Option(0.0, "--min-visibility", help="Minimum visibility score."),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON."),
+) -> None:
+    """Search the Qdrant index with a hybrid dense+BM25 query."""
+    import os
+
+    os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+    os.environ["HF_HUB_VERBOSITY"] = "error"
+    os.environ["TQDM_DISABLE"] = "1"
+    logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+    logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+    logging.getLogger("fastembed").setLevel(logging.ERROR)
+
+    try:
+        from ..query.client import Retriever
+        from ..query.filters import PayloadFilter
+    except ImportError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    try:
+        import contextlib
+        import io
+
+        col = "vtk_docs" if collection == "docs" else "vtk_code"
+        with contextlib.redirect_stderr(io.StringIO()):
+            retriever = Retriever(qdrant_url=qdrant_url)
+
+        filt = PayloadFilter()
+        if role:
+            filt.by_role(role)
+        if min_visibility > 0.0:
+            filt.min_visibility(min_visibility)
+
+        chunks = retriever.hybrid_search(query, collection=col, k=top, filters=filt)
+
+        if output_json:
+            typer.echo(json.dumps([c.model_dump() for c in chunks], indent=2))
+            return
+
+        if not chunks:
+            typer.echo("No results.")
+            return
+
+        for i, c in enumerate(chunks, 1):
+            classes = ", ".join(c.class_names) if c.class_names else "-"
+            role_tag = f" [{c.role}]" if c.role else ""
+            typer.echo(f"[{i}] {classes} ({c.chunk_type.value}){role_tag}")
+            typer.echo(f"    {c.content[:200].strip()}")
+            typer.echo("")
+    except Exception as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

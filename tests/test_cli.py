@@ -109,6 +109,31 @@ class TestSnapshotCommand:
         assert "Error" in result.output or result.exit_code != 0
 
 
+class TestSearchCommand:
+    def test_qdrant_unavailable_exits_nonzero(self):
+        result = runner.invoke(
+            app,
+            ["search", "sphere source", "--qdrant-url", "http://localhost:19999"],
+        )
+        assert result.exit_code != 0
+
+    def test_error_message_on_failure(self):
+        result = runner.invoke(
+            app,
+            ["search", "sphere source", "--qdrant-url", "http://localhost:19999"],
+        )
+        assert "Error" in result.output
+
+    def test_help_lists_options(self):
+        result = runner.invoke(app, ["search", "--help"])
+        assert result.exit_code == 0
+        assert "--collection" in result.output
+        assert "--top" in result.output
+        assert "--role" in result.output
+        assert "--min-visibility" in result.output
+        assert "--json" in result.output
+
+
 class TestNoArgsHelp:
     def test_no_args_shows_help(self):
         result = runner.invoke(app, [])
