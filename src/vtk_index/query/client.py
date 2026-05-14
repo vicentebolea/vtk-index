@@ -41,12 +41,12 @@ class Retriever:
 
     def __init__(
         self,
-        qdrant_url: str,
+        qdrant_url: str = ":memory:",
         vtk_version: str = "",
         dense_model: str = DenseEmbedder.DEFAULT_MODEL,
         sparse_model: str = SparseEmbedder.DEFAULT_MODEL,
     ) -> None:
-        self.client = QdrantClient(url=qdrant_url)
+        self.client = QdrantClient(qdrant_url)
         self.vtk_version = vtk_version
         self.dense = DenseEmbedder(dense_model)
         self.sparse = SparseEmbedder(sparse_model)

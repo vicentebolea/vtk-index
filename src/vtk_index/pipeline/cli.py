@@ -63,7 +63,7 @@ def chunk(
 def index(
     doc_chunks: Path = typer.Option(Path("doc-chunks.jsonl"), "--doc-chunks"),
     code_chunks: Path = typer.Option(Path("code-chunks.jsonl"), "--code-chunks"),
-    qdrant_url: str = typer.Option("http://localhost:6333", "--qdrant-url"),
+    qdrant_url: str = typer.Option(":memory:", "--qdrant-url"),
 ) -> None:
     """Embed chunks and upload to Qdrant."""
     try:
@@ -77,7 +77,7 @@ def index(
         raise typer.Exit(1)
 
     try:
-        client = QdrantClient(url=qdrant_url)
+        client = QdrantClient(qdrant_url)
         dense = DenseEmbedder()
         sparse = SparseEmbedder()
 
@@ -125,7 +125,7 @@ def index(
 
 @app.command()
 def snapshot(
-    qdrant_url: str = typer.Option("http://localhost:6333", "--qdrant-url"),
+    qdrant_url: str = typer.Option(":memory:", "--qdrant-url"),
     vtk_version: str = typer.Option("unknown", "--vtk-version"),
     output_dir: Path = typer.Option(Path("."), "--output-dir", "-o"),
 ) -> None:
@@ -143,7 +143,7 @@ def snapshot(
 @app.command()
 def build(
     knowledge_artifact: Path = typer.Argument(..., help="Path to vtk-knowledge JSONL artifact."),
-    qdrant_url: str = typer.Option("http://localhost:6333", "--qdrant-url"),
+    qdrant_url: str = typer.Option(":memory:", "--qdrant-url"),
     output_dir: Path = typer.Option(Path("."), "--output-dir", "-o"),
     vtk_version: str = typer.Option("", "--vtk-version"),
 ) -> None:
@@ -213,7 +213,7 @@ def _run_index(doc_chunks_path: str, code_chunks_path: str, qdrant_url: str) -> 
     from ..embedding.dense import DenseEmbedder
     from ..embedding.sparse import SparseEmbedder
 
-    client = QdrantClient(url=qdrant_url)
+    client = QdrantClient(qdrant_url)
     dense = DenseEmbedder()
     sparse = SparseEmbedder()
 
@@ -250,7 +250,7 @@ def _run_index(doc_chunks_path: str, code_chunks_path: str, qdrant_url: str) -> 
 @app.command()
 def search(
     query: str = typer.Argument(..., help="Search query string."),
-    qdrant_url: str = typer.Option("http://localhost:6333", "--qdrant-url"),
+    qdrant_url: str = typer.Option(":memory:", "--qdrant-url"),
     collection: str = typer.Option("docs", "--collection", "-c", help="docs or code."),
     top: int = typer.Option(10, "--top", "-n", help="Number of results."),
     role: str = typer.Option("", "--role", help="Filter by role (source, filter, mapper, ...)."),

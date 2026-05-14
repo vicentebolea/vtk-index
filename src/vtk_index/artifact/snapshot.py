@@ -29,7 +29,7 @@ def save_snapshot(
     Returns:
         Path to the ``vtk-index-{vtk_version}.snapshot.tar.gz`` file.
     """
-    client = QdrantClient(url=qdrant_url)
+    client = QdrantClient(qdrant_url)
     output_dir.mkdir(parents=True, exist_ok=True)
     tarball = output_dir / f"vtk-index-{vtk_version}.snapshot.tar.gz"
 
@@ -57,7 +57,7 @@ def load_snapshot(
         qdrant_url: URL of the target Qdrant instance.
         vtk_version: Optional version string for logging.
     """
-    client = QdrantClient(url=qdrant_url)
+    client = QdrantClient(qdrant_url)
     with tarfile.open(tarball, "r:gz") as tar:
         for member in tar.getmembers():
             collection = _collection_from_name(member.name)

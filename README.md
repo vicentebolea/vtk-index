@@ -102,7 +102,7 @@ vtk-index search "render window pipeline" --collection code
 # machine-readable JSON output
 vtk-index search "sphere source" --json
 
-# connect to a non-default Qdrant instance
+# connect to a persistent Qdrant instance instead of in-memory
 vtk-index search "mapper poly data" --qdrant-url http://myhost:6333
 ```
 
@@ -116,9 +116,8 @@ vtk-index chunk vtk-knowledge-9.6.1.jsonl -o chunks/
 ### index -- embed chunks and upload to Qdrant
 
 ```bash
-vtk-index index \
-  --doc-chunks chunks/doc-chunks.jsonl \
-  --qdrant-url http://localhost:6333
+vtk-index index --doc-chunks chunks/doc-chunks.jsonl   # in-memory by default
+vtk-index index --doc-chunks chunks/doc-chunks.jsonl --qdrant-url http://localhost:6333
 ```
 
 ### snapshot -- package collections as a portable tarball
@@ -141,10 +140,7 @@ vtk-index build vtk-knowledge-9.6.1.jsonl \
 ```python
 from vtk_index import Retriever
 
-retriever = Retriever(
-    qdrant_url="http://localhost:6333",
-    vtk_version="9.6.1",
-)
+retriever = Retriever()  # in-memory by default; pass qdrant_url for a persistent server
 
 # hybrid search over the docs collection
 chunks = retriever.search_docs("sphere source output poly data", k=5)
