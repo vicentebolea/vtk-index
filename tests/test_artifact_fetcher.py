@@ -328,8 +328,15 @@ class TestDownloadCommand:
         with patch("vtk_index.artifact.fetcher.urllib.request.urlopen", side_effect=_open):
             runner.invoke(
                 app,
-                ["download", "9.6.1", "--output-dir", str(tmp_path),
-                 "--repository", "myorg/vtk-index", "--no-embedded"],
+                [
+                    "download",
+                    "9.6.1",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--repository",
+                    "myorg/vtk-index",
+                    "--no-embedded",
+                ],
             )
 
         assert any("myorg/vtk-index" in u for u in captured)
