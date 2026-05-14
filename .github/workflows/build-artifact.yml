@@ -1,0 +1,61 @@
+name: Build Chunks Artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      vtk_version:
+        description: "VTK version to chunk (must already have a vtk-knowledge artifact on ghcr.io)"
+        required: true
+        default: "9.6.1"
+
+jobs:
+  build-artifact:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Create virtualenv
+        run: uv venv
+
+      - name: Install vtk-knowledge from GitHub
+        run: uv pip install "vtk-knowledge @ git+https://github.com/vicentebolea/vtk-knowledge.git"
+
+      - name: Install vtk-index
+        run: uv pip install -e .
+
+      - name: Download vtk-knowledge artifact
+        run: .venv/bin/vtk-knowledge download ${{ inputs.vtk_version }} -o artifacts/
+
+      - name: Chunk knowledge artifact
+        run: |
+          .venv/bin/vtk-index chunk \
+            artifacts/vtk-knowledge-${{ inputs.vtk_version }}.jsonl \
+            --output-dir artifacts/
+
+      - name: Log in to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io \
+            --username "${{ github.actor }}" \
+            --password-stdin
+
+      - name: Build and push scratch image
+        env:
+          REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.vtk_version }}
+        run: |
+          image="ghcr.io/$(echo "$REPO" | tr '[:upper:]' '[:lower:]')"
+          printf 'FROM scratch\nCOPY artifacts/doc-chunks.jsonl /doc-chunks.jsonl\n' > Dockerfile.artifact
+          podman build -f Dockerfile.artifact \
+            -t "$image:$VERSION" \
+            -t "$image:latest" \
+            .
+          podman push "$image:$VERSION"
+          podman push "$image:latest"
+          echo "Pushed $image:$VERSION and $image:latest"

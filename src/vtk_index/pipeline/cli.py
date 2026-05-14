@@ -309,5 +309,29 @@ def search(
         raise typer.Exit(1)
 
 
+@app.command()
+def download(
+    vtk_version: str = typer.Argument(..., help="VTK version to download, e.g. 9.6.1."),
+    output_dir: Path = typer.Option(Path("."), "--output-dir", "-o"),
+    repository: str = typer.Option(
+        "vicentebolea/vtk-index", "--repository", "-r", help="ghcr.io repository (owner/name)."
+    ),
+) -> None:
+    """Download a pre-built doc-chunks artifact from ghcr.io (no Qdrant or VTK needed)."""
+    try:
+        from ..artifact.fetcher import fetch_from_ghcr
+    except ImportError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        cache_path = fetch_from_ghcr(vtk_version, repository=repository, cache_dir=output_dir)
+        typer.echo(f"Downloaded doc-chunks to {cache_path}")
+    except RuntimeError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
