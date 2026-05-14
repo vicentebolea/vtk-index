@@ -67,6 +67,45 @@ pytest tests/
 
 ## CLI
 
+### download -- get a pre-built chunks artifact (no Qdrant or VTK needed)
+
+```bash
+# download doc-chunks for VTK 9.6.1 to the current directory
+vtk-index download 9.6.1
+
+# write to a specific directory
+vtk-index download 9.6.1 -o ./artifacts/
+
+# pull from a different ghcr.io repository
+vtk-index download 9.6.1 -r myorg/vtk-index
+```
+
+Pulls `doc-chunks-9.6.1.jsonl` from `ghcr.io/{repository}:{vtk_version}` via
+the OCI HTTP API — no docker or podman required. The file is cached in
+`~/.cache/vtk-index/` so repeated calls are instant.
+
+### search -- query the index from the command line
+
+```bash
+# basic search against the docs collection
+vtk-index search "sphere source"
+
+# limit results and filter by role
+vtk-index search "read STL file" --role source -n 5
+
+# filter by minimum visibility score
+vtk-index search "isosurface contour" --min-visibility 0.7
+
+# search code examples instead of docs
+vtk-index search "render window pipeline" --collection code
+
+# machine-readable JSON output
+vtk-index search "sphere source" --json
+
+# connect to a non-default Qdrant instance
+vtk-index search "mapper poly data" --qdrant-url http://myhost:6333
+```
+
 ### chunk -- split a knowledge artifact into Qdrant-ready chunks
 
 ```bash
@@ -169,7 +208,8 @@ src/vtk_index/
   embedding/sparse.py      # SparseEmbedder wrapping FastEmbed BM25
   query/client.py          # Retriever: search_docs / search_code / hybrid_search
   query/filters.py         # PayloadFilter builder and build_filter helper
-  pipeline/cli.py          # Typer CLI: chunk / index / snapshot / build
+  pipeline/cli.py          # Typer CLI: download / search / chunk / index / snapshot / build
+  artifact/fetcher.py      # fetch_from_ghcr: OCI pull without docker/podman
   artifact/snapshot.py     # save_snapshot / load_snapshot for Qdrant tarballs
 ```
 
