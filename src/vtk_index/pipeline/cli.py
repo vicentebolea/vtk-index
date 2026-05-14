@@ -314,9 +314,11 @@ def search(
         col = "vtk_docs" if collection == "docs" else "vtk_code"
 
         if vtk_version and storage is None and chunks_file is None:
-            from ..artifact.fetcher import fetch_embedded_storage
+            from ..artifact.fetcher import _CACHE_DIR, fetch_embedded_storage
 
-            typer.echo(f"Fetching embedded storage for VTK {vtk_version} ...", err=True)
+            storage_candidate = _CACHE_DIR / f"storage-{vtk_version}"
+            if not storage_candidate.exists():
+                typer.echo(f"Downloading embedded storage for VTK {vtk_version} ...", err=True)
             storage = fetch_embedded_storage(vtk_version)
 
         if storage is not None:
@@ -392,7 +394,9 @@ def search(
 @app.command()
 def download(
     vtk_version: str = typer.Argument(..., help="VTK version to download, e.g. 9.6.1."),
-    output_dir: Path = typer.Option(Path("."), "--output-dir", "-o"),
+    output_dir: Path = typer.Option(
+        None, "--output-dir", "-o", help="Cache directory. Defaults to ~/.cache/vtk-index/."
+    ),
     repository: str = typer.Option(
         "vicentebolea/vtk-index", "--repository", "-r", help="ghcr.io repository (owner/name)."
     ),
@@ -410,19 +414,20 @@ def download(
     Use --no-chunks or --no-embedded to skip one of them.
     """
     try:
-        from ..artifact.fetcher import fetch_embedded_storage, fetch_from_ghcr
+        from ..artifact.fetcher import _CACHE_DIR, fetch_embedded_storage, fetch_from_ghcr
     except ImportError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
     try:
-        output_dir.mkdir(parents=True, exist_ok=True)
+        cache_dir = output_dir if output_dir is not None else _CACHE_DIR
+        cache_dir.mkdir(parents=True, exist_ok=True)
         if not no_chunks:
-            chunks_path = fetch_from_ghcr(vtk_version, repository=repository, cache_dir=output_dir)
+            chunks_path = fetch_from_ghcr(vtk_version, repository=repository, cache_dir=cache_dir)
             typer.echo(f"Downloaded doc-chunks to {chunks_path}")
         if not no_embedded:
             storage_path = fetch_embedded_storage(
-                vtk_version, repository=repository, cache_dir=output_dir
+                vtk_version, repository=repository, cache_dir=cache_dir
             )
             typer.echo(f"Downloaded embedded storage to {storage_path}")
             typer.echo(f"Search with: vtk-index search --vtk-version {vtk_version} <query>")
