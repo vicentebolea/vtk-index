@@ -1,10 +1,10 @@
 # vtk-index
 
 Chunking, embedding, and hybrid retrieval over the VTK knowledge artifact.
-Takes the JSONL file produced by `vtk-knowledge`, splits it into
-searchable chunks, embeds them with dense and sparse models, and stores
-them in Qdrant. The `Retriever` class exposes hybrid search (dense + BM25
-Reciprocal Rank Fusion) over the resulting collections.
+Takes the JSONL file produced by `vtk-knowledge`, splits it into searchable
+chunks, embeds them with dense and sparse models, and stores them in Qdrant.
+The `Retriever` class exposes hybrid search (dense + BM25 Reciprocal Rank
+Fusion) over the resulting collections.
 
 This is Layer 2 of a four-layer stack:
 
@@ -22,17 +22,11 @@ Each layer only depends on layers below it.
 `vtk-index` is not yet on PyPI. Install from GitHub using uv:
 
 ```bash
-# in your project's pyproject.toml, add the git source overrides:
-# [tool.uv.sources]
-# vtk-knowledge = {git = "https://github.com/vicentebolea/vtk-knowledge.git"}
-# vtk-index    = {git = "https://github.com/vicentebolea/vtk-index.git"}
-
 uv add "vtk-index @ git+https://github.com/vicentebolea/vtk-index.git"
 ```
 
-Because `vtk-index` depends on `vtk-knowledge` (also not on PyPI), you need
-to declare both git sources in your `pyproject.toml` so uv can resolve the
-full dependency graph:
+Because `vtk-index` depends on `vtk-knowledge` (also not on PyPI), declare
+both git sources in your `pyproject.toml`:
 
 ```toml
 [tool.uv.sources]
@@ -40,21 +34,14 @@ vtk-knowledge = {git = "https://github.com/vicentebolea/vtk-knowledge.git"}
 vtk-index     = {git = "https://github.com/vicentebolea/vtk-index.git"}
 ```
 
-Then:
-
-```bash
-uv add vtk-index
-uv sync
-```
-
-With pip (direct git install):
+With pip:
 
 ```bash
 pip install "vtk-knowledge @ git+https://github.com/vicentebolea/vtk-knowledge.git"
 pip install "vtk-index @ git+https://github.com/vicentebolea/vtk-index.git"
 ```
 
-For development on vtk-index itself:
+For development:
 
 ```bash
 git clone https://github.com/vicentebolea/vtk-index
@@ -69,17 +56,20 @@ pytest tests/
 
 ### download -- get pre-built artifacts (no Qdrant or VTK needed)
 
+Downloads both the doc-chunks JSONL and the pre-built embedded Qdrant storage
+to `~/.cache/vtk-index/` by default.
+
 ```bash
-# download both doc-chunks JSONL and pre-built embedded storage (default)
+# download both artifacts (recommended — enables instant search)
 vtk-index download 9.6.1
 
-# write to a specific directory
+# write to a specific directory instead of ~/.cache/vtk-index/
 vtk-index download 9.6.1 -o ./artifacts/
 
-# only the embedded storage (for instant search, skips chunks JSONL)
+# only the embedded storage (skips doc-chunks JSONL)
 vtk-index download 9.6.1 --no-chunks
 
-# only the doc-chunks JSONL
+# only the doc-chunks JSONL (skips embedded storage)
 vtk-index download 9.6.1 --no-embedded
 
 # pull from a different ghcr.io repository
@@ -87,36 +77,34 @@ vtk-index download 9.6.1 -r myorg/vtk-index
 ```
 
 Pulls from `ghcr.io/{repository}` via the OCI HTTP API — no docker or podman
-required. Files are cached in `~/.cache/vtk-index/` so repeated calls are
-instant:
-- `doc-chunks-9.6.1.jsonl` — raw chunks, use with `search --chunks`
-- `storage-9.6.1/` — pre-built Qdrant embedded storage, use with `search --vtk-version`
+required. Two artifacts are cached in `~/.cache/vtk-index/`:
+
+| File | Tag | Use with |
+|---|---|---|
+| `doc-chunks-9.6.1.jsonl` | `9.6.1` | `search --chunks` (embeds on the fly) |
+| `storage-9.6.1/` | `9.6.1-embedded` | `search --vtk-version` (instant, no embedding) |
 
 ### search -- query the index from the command line
 
-The default Qdrant backend is in-memory. Pass `--chunks` to load a
-pre-built chunks file before searching — no server required:
+Three backends, pick the one that suits your setup:
 
 ```bash
-# download then search in one shot (no Qdrant server needed)
-vtk-index download 9.6.1
+# fastest: use pre-built embedded storage downloaded by 'vtk-index download'
+vtk-index search --vtk-version 9.6.1 "sphere source"
+vtk-index search --vtk-version 9.6.1 "read STL file" --role source -n 5
+vtk-index search --vtk-version 9.6.1 "isosurface contour" --min-visibility 0.7
+vtk-index search --vtk-version 9.6.1 "render window" --collection code
+vtk-index search --vtk-version 9.6.1 "sphere source" --json
+
+# alternative: load doc-chunks and embed on the fly (~30s startup)
 vtk-index search "sphere source" --chunks doc-chunks-9.6.1.jsonl
 
-# limit results and filter by role
-vtk-index search "read STL file" --chunks doc-chunks-9.6.1.jsonl --role source -n 5
-
-# filter by minimum visibility score
-vtk-index search "isosurface contour" --chunks doc-chunks-9.6.1.jsonl --min-visibility 0.7
-
-# search code examples instead of docs
-vtk-index search "render window pipeline" --chunks doc-chunks-9.6.1.jsonl --collection code
-
-# machine-readable JSON output
-vtk-index search "sphere source" --chunks doc-chunks-9.6.1.jsonl --json
-
-# connect to a persistent Qdrant instance instead of in-memory
-vtk-index search "mapper poly data" --qdrant-url http://myhost:6333
+# alternative: running Qdrant server
+vtk-index search "sphere source" --qdrant-url http://myhost:6333
 ```
+
+`--vtk-version` downloads the embedded storage on first use and caches it.
+Subsequent queries are instant — no server, no embedding models at query time.
 
 ### chunk -- split a knowledge artifact into Qdrant-ready chunks
 
@@ -128,11 +116,14 @@ vtk-index chunk vtk-knowledge-9.6.1.jsonl -o chunks/
 ### index -- embed chunks and upload to Qdrant
 
 ```bash
-vtk-index index --doc-chunks chunks/doc-chunks.jsonl   # in-memory by default
+# write to a local embedded storage directory (no server needed)
+vtk-index index --doc-chunks chunks/doc-chunks.jsonl --path ./storage/
+
+# upload to a running Qdrant server
 vtk-index index --doc-chunks chunks/doc-chunks.jsonl --qdrant-url http://localhost:6333
 ```
 
-### snapshot -- package collections as a portable tarball
+### snapshot -- package server collections as a tarball
 
 ```bash
 vtk-index snapshot --vtk-version 9.6.1 -o .
@@ -152,32 +143,35 @@ vtk-index build vtk-knowledge-9.6.1.jsonl \
 ```python
 from vtk_index import Retriever
 
-retriever = Retriever()  # in-memory by default; pass qdrant_url for a persistent server
-
-# hybrid search over the docs collection
-chunks = retriever.search_docs("sphere source output poly data", k=5)
+# zero-config: downloads pre-built storage on first call, instant after
+retriever = Retriever.from_artifact("9.6.1")
+chunks = retriever.search_docs("sphere source", k=5)
 for c in chunks:
     print(c.class_names, c.chunk_type, c.content[:120])
 
-# search over indexed code examples
-chunks = retriever.search_code("render window interactor pipeline", k=5)
+# explicit in-memory (requires indexing first)
+retriever = Retriever()
 
-# explicit hybrid search on any collection with a filter
+# explicit server
+retriever = Retriever(qdrant_url="http://localhost:6333")
+
+# explicit local storage path
+retriever = Retriever(qdrant_path="./storage-9.6.1")
+
+# hybrid search with filter
 from vtk_index.query.filters import PayloadFilter
 
-filt = PayloadFilter().by_role("source").min_visibility(0.6)
 chunks = retriever.hybrid_search(
     "read STL file",
     collection="vtk_docs",
     k=10,
-    filters=filt,
+    filters=PayloadFilter().by_role("source").min_visibility(0.6),
 )
 ```
 
 ## Chunk types
 
-Each `VTKDocRecord` from the knowledge artifact is split into one or more
-`Chunk` objects stored in Qdrant:
+Each `VTKDocRecord` is split into one or more `Chunk` objects stored in Qdrant:
 
 | `chunk_type` | Content |
 |---|---|
@@ -191,19 +185,30 @@ Each `VTKDocRecord` from the knowledge artifact is split into one or more
 
 ## Payload filters
 
-`PayloadFilter` and `build_filter` convert plain dicts or builder chains
-into Qdrant `Filter` objects:
-
 ```python
-from vtk_index.query.filters import PayloadFilter
+from vtk_index.query.filters import PayloadFilter, build_filter
 
-# all source-role classes with visibility >= 0.7
+# builder pattern
 f = PayloadFilter().by_role("source").min_visibility(0.7).build()
 
 # plain dict (same result)
-from vtk_index.query.filters import build_filter
 f = build_filter({"role": "source", "visibility_score": {"gte": 0.7}})
 ```
+
+## CI build workflow
+
+`workflow_dispatch` in `.github/workflows/build-artifact.yml`:
+
+1. **Actions -> Build Chunks Artifact -> Run workflow**
+2. Set the VTK version (must already have a `vtk-knowledge` artifact on ghcr.io)
+
+The workflow:
+1. Downloads the `vtk-knowledge` JSONL artifact from `ghcr.io/vicentebolea/vtk-knowledge`
+2. Runs `vtk-index chunk` to produce `doc-chunks.jsonl`
+3. Runs `vtk-index index --path storage/` to build the embedded Qdrant storage
+4. Pushes two FROM-scratch OCI images to ghcr.io:
+   - `ghcr.io/vicentebolea/vtk-index:{vtk_version}` — doc-chunks JSONL
+   - `ghcr.io/vicentebolea/vtk-index:{vtk_version}-embedded` — pre-built Qdrant storage
 
 ## Code layout
 
@@ -214,11 +219,11 @@ src/vtk_index/
   chunking/code_chunker.py # Python example scripts -> list[Chunk]
   embedding/dense.py       # DenseEmbedder wrapping sentence-transformers
   embedding/sparse.py      # SparseEmbedder wrapping FastEmbed BM25
-  query/client.py          # Retriever: search_docs / search_code / hybrid_search
+  query/client.py          # Retriever: from_artifact / search_docs / search_code / hybrid_search
   query/filters.py         # PayloadFilter builder and build_filter helper
   pipeline/cli.py          # Typer CLI: download / search / chunk / index / snapshot / build
-  artifact/fetcher.py      # fetch_from_ghcr: OCI pull without docker/podman
-  artifact/snapshot.py     # save_snapshot / load_snapshot for Qdrant tarballs
+  artifact/fetcher.py      # fetch_from_ghcr / fetch_embedded_storage: OCI pull without docker
+  artifact/snapshot.py     # save_snapshot / load_snapshot for Qdrant server tarballs
 ```
 
 ## Related repos
