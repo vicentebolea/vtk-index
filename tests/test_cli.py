@@ -13,6 +13,12 @@ from vtk_index.pipeline.cli import app
 runner = CliRunner()
 
 
+def _strip_ansi(s: str) -> str:
+    import re
+
+    return re.sub(r"\x1b\[[0-9;]*m", "", s)
+
+
 def _make_jsonl(tmp_path: Path, records: list[dict]) -> Path:
     p = tmp_path / "knowledge.jsonl"
     with open(p, "w") as f:
@@ -127,11 +133,12 @@ class TestSearchCommand:
     def test_help_lists_options(self):
         result = runner.invoke(app, ["search", "--help"])
         assert result.exit_code == 0
-        assert "--collection" in result.output
-        assert "--top" in result.output
-        assert "--role" in result.output
-        assert "--min-visibility" in result.output
-        assert "--json" in result.output
+        out = _strip_ansi(result.output)
+        assert "--collection" in out
+        assert "--top" in out
+        assert "--role" in out
+        assert "--min-visibility" in out
+        assert "--json" in out
 
 
 class TestNoArgsHelp:

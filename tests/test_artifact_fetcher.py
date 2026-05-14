@@ -269,7 +269,10 @@ class TestDownloadCommand:
         assert any("myorg/vtk-index" in u for u in captured)
 
     def test_help_shows_options(self):
+        import re
+
         result = runner.invoke(app, ["download", "--help"])
         assert result.exit_code == 0
-        assert "--output-dir" in result.output
-        assert "--repository" in result.output
+        out = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+        assert "--output-dir" in out
+        assert "--repository" in out
