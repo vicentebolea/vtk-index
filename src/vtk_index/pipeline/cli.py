@@ -250,6 +250,12 @@ def _run_index(doc_chunks_path: str, code_chunks_path: str, qdrant_url: str) -> 
 @app.command()
 def search(
     query: str = typer.Argument(..., help="Search query string."),
+    chunks_file: Path = typer.Option(
+        None,
+        "--chunks",
+        help="doc-chunks JSONL to load into memory before searching. "
+        "Required when --qdrant-url is :memory: (the default).",
+    ),
     qdrant_url: str = typer.Option(":memory:", "--qdrant-url"),
     collection: str = typer.Option("docs", "--collection", "-c", help="docs or code."),
     top: int = typer.Option(10, "--top", "-n", help="Number of results."),
@@ -257,7 +263,14 @@ def search(
     min_visibility: float = typer.Option(0.0, "--min-visibility", help="Minimum visibility score."),
     output_json: bool = typer.Option(False, "--json", help="Output raw JSON."),
 ) -> None:
-    """Search the Qdrant index with a hybrid dense+BM25 query."""
+    """Search the Qdrant index with a hybrid dense+BM25 query.
+
+    With the default in-memory Qdrant, pass --chunks to load a doc-chunks JSONL
+    file before searching. With a persistent server, omit --chunks and point
+    --qdrant-url at the running instance.
+    """
+    import contextlib
+    import io
     import os
 
     os.environ["TRANSFORMERS_VERBOSITY"] = "error"
@@ -268,6 +281,8 @@ def search(
     logging.getLogger("fastembed").setLevel(logging.ERROR)
 
     try:
+        from qdrant_client.models import PointStruct, SparseVector
+
         from ..query.client import Retriever
         from ..query.filters import PayloadFilter
     except ImportError as e:
@@ -275,12 +290,43 @@ def search(
         raise typer.Exit(1)
 
     try:
-        import contextlib
-        import io
-
         col = "vtk_docs" if collection == "docs" else "vtk_code"
+
         with contextlib.redirect_stderr(io.StringIO()):
             retriever = Retriever(qdrant_url=qdrant_url)
+
+        if chunks_file is not None:
+            if not chunks_file.exists():
+                typer.echo(f"Error: chunks file not found: {chunks_file}", err=True)
+                raise typer.Exit(1)
+            typer.echo(f"Loading {chunks_file} ...", err=True)
+            raw_chunks = []
+            with open(chunks_file) as f:
+                for line in f:
+                    if line.strip():
+                        raw_chunks.append(json.loads(line))
+            _ensure_collection(retriever.client, col)
+            contents = [c.get("content", "") for c in raw_chunks]
+            dense_vecs = retriever.dense.encode_batch(contents)
+            sparse_embs = retriever.sparse.embed_batch(contents)
+            points = [
+                PointStruct(
+                    id=i,
+                    vector={
+                        "content": dv,
+                        "bm25": SparseVector(
+                            indices=se.indices.tolist(),
+                            values=se.values.tolist(),
+                        ),
+                    },
+                    payload=c,
+                )
+                for i, (c, dv, se) in enumerate(
+                    zip(raw_chunks, dense_vecs, sparse_embs, strict=False)
+                )
+            ]
+            _upsert_batched(retriever.client, col, points)
+            typer.echo(f"Indexed {len(points)} chunks.", err=True)
 
         filt = PayloadFilter()
         if role:

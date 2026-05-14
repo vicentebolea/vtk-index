@@ -86,21 +86,25 @@ the OCI HTTP API — no docker or podman required. The file is cached in
 
 ### search -- query the index from the command line
 
+The default Qdrant backend is in-memory. Pass `--chunks` to load a
+pre-built chunks file before searching — no server required:
+
 ```bash
-# basic search against the docs collection
-vtk-index search "sphere source"
+# download then search in one shot (no Qdrant server needed)
+vtk-index download 9.6.1
+vtk-index search "sphere source" --chunks doc-chunks-9.6.1.jsonl
 
 # limit results and filter by role
-vtk-index search "read STL file" --role source -n 5
+vtk-index search "read STL file" --chunks doc-chunks-9.6.1.jsonl --role source -n 5
 
 # filter by minimum visibility score
-vtk-index search "isosurface contour" --min-visibility 0.7
+vtk-index search "isosurface contour" --chunks doc-chunks-9.6.1.jsonl --min-visibility 0.7
 
 # search code examples instead of docs
-vtk-index search "render window pipeline" --collection code
+vtk-index search "render window pipeline" --chunks doc-chunks-9.6.1.jsonl --collection code
 
 # machine-readable JSON output
-vtk-index search "sphere source" --json
+vtk-index search "sphere source" --chunks doc-chunks-9.6.1.jsonl --json
 
 # connect to a persistent Qdrant instance instead of in-memory
 vtk-index search "mapper poly data" --qdrant-url http://myhost:6333
