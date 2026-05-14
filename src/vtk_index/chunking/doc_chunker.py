@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from vtk_knowledge import VTKDocRecord
 
 
-def chunk_record(record: "VTKDocRecord") -> list[Chunk]:
+def chunk_record(record: VTKDocRecord) -> list[Chunk]:
     """Split a single VTKDocRecord into one or more Chunks."""
     chunks: list[Chunk] = []
     base_payload = dict(
@@ -67,7 +67,7 @@ def chunk_record(record: "VTKDocRecord") -> list[Chunk]:
     return chunks
 
 
-def _build_overview(record: "VTKDocRecord") -> str:
+def _build_overview(record: VTKDocRecord) -> str:
     parts = [f"{record.class_name} ({record.module_name})"]
     if record.synopsis:
         parts.append(record.synopsis)

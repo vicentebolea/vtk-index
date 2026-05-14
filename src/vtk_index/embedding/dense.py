@@ -13,6 +13,7 @@ class DenseEmbedder:
 
     def __init__(self, model_name: str = DEFAULT_MODEL) -> None:
         from sentence_transformers import SentenceTransformer
+
         self._model = SentenceTransformer(model_name)
         self.model_name = model_name
 

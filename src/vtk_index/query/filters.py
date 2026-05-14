@@ -42,23 +42,23 @@ class PayloadFilter:
     def __init__(self) -> None:
         self._d: dict[str, Any] = {}
 
-    def by_class(self, class_name: str) -> "PayloadFilter":
+    def by_class(self, class_name: str) -> PayloadFilter:
         self._d["class_names"] = class_name
         return self
 
-    def by_role(self, role: str) -> "PayloadFilter":
+    def by_role(self, role: str) -> PayloadFilter:
         self._d["role"] = role
         return self
 
-    def by_input_type(self, dtype: str) -> "PayloadFilter":
+    def by_input_type(self, dtype: str) -> PayloadFilter:
         self._d["input_datatype"] = dtype
         return self
 
-    def by_output_type(self, dtype: str) -> "PayloadFilter":
+    def by_output_type(self, dtype: str) -> PayloadFilter:
         self._d["output_datatype"] = dtype
         return self
 
-    def min_visibility(self, score: float) -> "PayloadFilter":
+    def min_visibility(self, score: float) -> PayloadFilter:
         self._d["visibility_score"] = {"gte": score}
         return self
 

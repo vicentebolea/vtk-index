@@ -7,8 +7,6 @@ analysis. It produces PIPELINE_EXAMPLE and QUERY_EXAMPLE chunks.
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
-from typing import Any
 
 from .base import Chunk, ChunkType
 
@@ -25,6 +23,7 @@ def chunk_code_file(
     try:
         from vtk_rag.chunking.code.chunker import CodeChunker
         from vtk_rag.mcp import get_vtk_client
+
         chunker = CodeChunker(source, path, get_vtk_client())
         raw_chunks = chunker.extract_chunks()
     except Exception:

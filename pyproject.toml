@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "vtk-index"
@@ -46,17 +46,15 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/patrickoleary/vtk-rag"
-Repository = "https://github.com/patrickoleary/vtk-rag"
-Documentation = "https://github.com/patrickoleary/vtk-rag#readme"
+Homepage = "https://github.com/vicentebolea/vtk-index"
+Repository = "https://github.com/vicentebolea/vtk-index"
+Documentation = "https://github.com/vicentebolea/vtk-index#readme"
 
 [project.scripts]
-vtk-index = "vtk_index.build.cli:app"
-vtk-rag = "vtk_rag.cli:main"
+vtk-index = "vtk_index.pipeline.cli:app"
 
-[tool.setuptools.packages.find]
-where = ["src", "."]
-include = ["vtk_index*", "vtk_rag*"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/vtk_index"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -64,13 +62,14 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+pythonpath = ["src"]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]
 
 [tool.coverage.run]
-source = ["vtk_rag"]
+source = ["vtk_index"]
 omit = ["tests/*"]
 
 [tool.coverage.report]
@@ -86,16 +85,18 @@ line-length = 100
 
 [tool.ruff.lint]
 select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes
-    "I",      # isort
-    "B",      # flake8-bugbear
-    "UP",     # pyupgrade
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "UP",
 ]
 ignore = [
-    "E501",   # line too long (handled by formatter)
+    "E501",
+    "B008",
+    "B904",
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["vtk_rag"]
+known-first-party = ["vtk_index"]

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import tarfile
-import time
 from pathlib import Path
 
 from qdrant_client import QdrantClient

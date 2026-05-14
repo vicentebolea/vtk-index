@@ -10,6 +10,7 @@ class SparseEmbedder:
 
     def __init__(self, model_name: str = DEFAULT_MODEL) -> None:
         from fastembed import SparseTextEmbedding
+
         self._model = SparseTextEmbedding(model_name)
         self.model_name = model_name
 

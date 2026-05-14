@@ -6,7 +6,7 @@ hybrid retrieval (dense + BM25) with RRF fusion.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -20,7 +20,7 @@ from qdrant_client.models import (
 from ..chunking.base import Chunk
 from ..embedding.dense import DenseEmbedder
 from ..embedding.sparse import SparseEmbedder
-from .filters import build_filter, PayloadFilter
+from .filters import PayloadFilter, build_filter
 
 
 class Retriever:
@@ -55,7 +55,7 @@ class Retriever:
         self,
         query: str,
         k: int = 10,
-        filters: Optional[PayloadFilter | dict[str, Any] | Filter] = None,
+        filters: PayloadFilter | dict[str, Any] | Filter | None = None,
     ) -> list[Chunk]:
         return self.hybrid_search(query, self.DOCS_COLLECTION, k=k, filters=filters)
 
@@ -63,7 +63,7 @@ class Retriever:
         self,
         query: str,
         k: int = 10,
-        filters: Optional[PayloadFilter | dict[str, Any] | Filter] = None,
+        filters: PayloadFilter | dict[str, Any] | Filter | None = None,
     ) -> list[Chunk]:
         return self.hybrid_search(query, self.CODE_COLLECTION, k=k, filters=filters)
 
@@ -73,7 +73,7 @@ class Retriever:
         collection: str,
         k: int = 10,
         alpha: float = 0.5,
-        filters: Optional[PayloadFilter | dict[str, Any] | Filter] = None,
+        filters: PayloadFilter | dict[str, Any] | Filter | None = None,
         prefetch_limit: int = 20,
     ) -> list[Chunk]:
         """Reciprocal Rank Fusion of dense and sparse results."""
@@ -106,6 +106,7 @@ def _to_filter(f) -> Filter | None:
 
 def _to_chunk(point) -> Chunk:
     from ..chunking.base import ChunkType
+
     payload = point.payload or {}
     try:
         ct = ChunkType(payload.get("chunk_type", "class_overview"))

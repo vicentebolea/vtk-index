@@ -1,7 +1,6 @@
 """Pydantic Chunk model — the unit stored in Qdrant."""
 
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -22,10 +21,10 @@ class Chunk(BaseModel):
     content: str
     class_names: list[str] = []
     module_names: list[str] = []
-    role: Optional[str] = None
-    input_datatype: Optional[str] = None
-    output_datatype: Optional[str] = None
-    visibility_score: Optional[float] = None
+    role: str | None = None
+    input_datatype: str | None = None
+    output_datatype: str | None = None
+    visibility_score: float | None = None
     source: str = "vtk-knowledge"
     source_path: str = ""
     vtk_version: str = ""
