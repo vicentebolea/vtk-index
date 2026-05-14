@@ -52,7 +52,12 @@ uv venv
 uv pip install "vtk-knowledge @ git+https://github.com/vicentebolea/vtk-knowledge.git"
 uv pip install -e ".[dev]"
 pytest tests/
+uv run vtk-index   # run the CLI (venv does not need to be activated)
 ```
+
+If working inside the monorepo workspace, `uv add --dev .` installs vtk-index
+into the shared workspace venv. Use `uv run vtk-index` to invoke the CLI — the
+workspace venv is not automatically on `PATH`.
 
 ## CLI
 
