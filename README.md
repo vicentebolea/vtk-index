@@ -67,22 +67,30 @@ pytest tests/
 
 ## CLI
 
-### download -- get a pre-built chunks artifact (no Qdrant or VTK needed)
+### download -- get pre-built artifacts (no Qdrant or VTK needed)
 
 ```bash
-# download doc-chunks for VTK 9.6.1 to the current directory
+# download both doc-chunks JSONL and pre-built embedded storage (default)
 vtk-index download 9.6.1
 
 # write to a specific directory
 vtk-index download 9.6.1 -o ./artifacts/
 
+# only the embedded storage (for instant search, skips chunks JSONL)
+vtk-index download 9.6.1 --no-chunks
+
+# only the doc-chunks JSONL
+vtk-index download 9.6.1 --no-embedded
+
 # pull from a different ghcr.io repository
 vtk-index download 9.6.1 -r myorg/vtk-index
 ```
 
-Pulls `doc-chunks-9.6.1.jsonl` from `ghcr.io/{repository}:{vtk_version}` via
-the OCI HTTP API — no docker or podman required. The file is cached in
-`~/.cache/vtk-index/` so repeated calls are instant.
+Pulls from `ghcr.io/{repository}` via the OCI HTTP API — no docker or podman
+required. Files are cached in `~/.cache/vtk-index/` so repeated calls are
+instant:
+- `doc-chunks-9.6.1.jsonl` — raw chunks, use with `search --chunks`
+- `storage-9.6.1/` — pre-built Qdrant embedded storage, use with `search --vtk-version`
 
 ### search -- query the index from the command line
 

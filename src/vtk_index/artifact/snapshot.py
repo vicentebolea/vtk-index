@@ -33,8 +33,12 @@ def save_snapshot(
     output_dir.mkdir(parents=True, exist_ok=True)
     tarball = output_dir / f"vtk-index-{vtk_version}.snapshot.tar.gz"
 
+    existing = {c.name for c in client.get_collections().collections}
     with tarfile.open(tarball, "w:gz") as tar:
         for collection in (_DOCS_COLLECTION, _CODE_COLLECTION):
+            if collection not in existing:
+                logger.info("Skipping %s (collection not found)", collection)
+                continue
             snap = client.create_snapshot(collection_name=collection)
             snap_path = Path(snap.name)
             if snap_path.exists():

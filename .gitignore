@@ -15,3 +15,5 @@ venv/
 .coverage
 htmlcov/
 .pytest_cache/
+tmp/
+Dockerfile.*

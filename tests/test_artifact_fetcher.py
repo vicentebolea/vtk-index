@@ -207,25 +207,94 @@ class TestFetchFromGhcr:
 # ---------------------------------------------------------------------------
 
 
+def _double_urlopen_side_effect(blob: bytes):
+    """Six responses: token+manifest+blob for chunks, then token+manifest+blob for storage."""
+    storage_blob = _storage_blob()
+    responses = iter(
+        [
+            json.dumps({"token": "t1"}).encode(),
+            json.dumps({"layers": [{"digest": "sha256:c"}]}).encode(),
+            blob,
+            json.dumps({"token": "t2"}).encode(),
+            json.dumps({"layers": [{"digest": "sha256:s"}]}).encode(),
+            storage_blob,
+        ]
+    )
+
+    def _open(req_or_url, **_kw):
+        data = next(responses)
+        cm = MagicMock()
+        cm.__enter__ = lambda s: MagicMock(read=lambda: data)
+        cm.__exit__ = MagicMock(return_value=False)
+        return cm
+
+    return _open
+
+
+def _storage_blob() -> bytes:
+    """Minimal OCI layer blob containing a fake storage directory."""
+    import io as _io
+    import tarfile as _tf
+
+    buf = _io.BytesIO()
+    with _tf.open(fileobj=buf, mode="w:gz") as tar:
+        for name, content in [
+            ("meta.json", b'{"collections":{}}'),
+            ("collection/vtk_docs/storage.sqlite", b"SQLite"),
+        ]:
+            info = _tf.TarInfo(name=name)
+            info.size = len(content)
+            tar.addfile(info, _io.BytesIO(content))
+    return buf.getvalue()
+
+
 class TestDownloadCommand:
-    def test_success_writes_file(self, tmp_path):
+    def test_downloads_both_by_default(self, tmp_path):
+        blob = _layer_blob(_minimal_chunk())
+        with patch(
+            "vtk_index.artifact.fetcher.urllib.request.urlopen",
+            side_effect=_double_urlopen_side_effect(blob),
+        ):
+            result = runner.invoke(app, ["download", "9.6.1", "--output-dir", str(tmp_path)])
+        assert result.exit_code == 0
+        assert (tmp_path / "doc-chunks-9.6.1.jsonl").exists()
+        assert (tmp_path / "storage-9.6.1").exists()
+
+    def test_no_embedded_skips_storage(self, tmp_path):
         blob = _layer_blob(_minimal_chunk())
         with patch(
             "vtk_index.artifact.fetcher.urllib.request.urlopen",
             side_effect=_urlopen_side_effect(blob),
         ):
-            result = runner.invoke(app, ["download", "9.6.1", "--output-dir", str(tmp_path)])
+            result = runner.invoke(
+                app, ["download", "9.6.1", "--output-dir", str(tmp_path), "--no-embedded"]
+            )
         assert result.exit_code == 0
         assert (tmp_path / "doc-chunks-9.6.1.jsonl").exists()
+        assert not (tmp_path / "storage-9.6.1").exists()
+
+    def test_no_chunks_skips_jsonl(self, tmp_path):
+        storage_blob = _storage_blob()
+        with patch(
+            "vtk_index.artifact.fetcher.urllib.request.urlopen",
+            side_effect=_urlopen_side_effect(storage_blob),
+        ):
+            result = runner.invoke(
+                app, ["download", "9.6.1", "--output-dir", str(tmp_path), "--no-chunks"]
+            )
+        assert result.exit_code == 0
+        assert not (tmp_path / "doc-chunks-9.6.1.jsonl").exists()
+        assert (tmp_path / "storage-9.6.1").exists()
 
     def test_success_message_printed(self, tmp_path):
         blob = _layer_blob(_minimal_chunk())
         with patch(
             "vtk_index.artifact.fetcher.urllib.request.urlopen",
-            side_effect=_urlopen_side_effect(blob),
+            side_effect=_double_urlopen_side_effect(blob),
         ):
             result = runner.invoke(app, ["download", "9.6.1", "--output-dir", str(tmp_path)])
         assert "doc-chunks" in result.output
+        assert "storage" in result.output
 
     def test_network_error_exits_nonzero(self, tmp_path):
         with patch(
@@ -239,15 +308,18 @@ class TestDownloadCommand:
     def test_custom_repository_forwarded(self, tmp_path):
         blob = _layer_blob(_minimal_chunk())
         captured = []
+        responses = iter(
+            [
+                json.dumps({"token": "t"}).encode(),
+                json.dumps({"layers": [{"digest": "sha256:x"}]}).encode(),
+                blob,
+            ]
+        )
 
         def _open(req_or_url, **_kw):
             url = req_or_url if isinstance(req_or_url, str) else req_or_url.full_url
             captured.append(url)
-            data = [
-                json.dumps({"token": "t"}).encode(),
-                json.dumps({"layers": [{"digest": "sha256:x"}]}).encode(),
-                blob,
-            ][len(captured) - 1]
+            data = next(responses)
             cm = MagicMock()
             cm.__enter__ = lambda s: MagicMock(read=lambda: data)
             cm.__exit__ = MagicMock(return_value=False)
@@ -263,6 +335,7 @@ class TestDownloadCommand:
                     str(tmp_path),
                     "--repository",
                     "myorg/vtk-index",
+                    "--no-embedded",
                 ],
             )
 
