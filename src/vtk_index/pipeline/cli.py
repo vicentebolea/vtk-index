@@ -396,18 +396,18 @@ def download(
     repository: str = typer.Option(
         "vicentebolea/vtk-index", "--repository", "-r", help="ghcr.io repository (owner/name)."
     ),
-    embedded: bool = typer.Option(
-        False,
-        "--embedded",
-        help="Download the pre-built embedded Qdrant storage instead of doc-chunks JSONL. "
-        "Use with: vtk-index search --storage <path>",
+    no_chunks: bool = typer.Option(False, "--no-chunks", help="Skip the doc-chunks JSONL."),
+    no_embedded: bool = typer.Option(
+        False, "--no-embedded", help="Skip the pre-built embedded storage."
     ),
 ) -> None:
-    """Download a pre-built artifact from ghcr.io (no Qdrant or VTK needed).
+    """Download pre-built artifacts from ghcr.io (no Qdrant or VTK needed).
 
-    Without --embedded: downloads doc-chunks JSONL (use with search --chunks).
-    With    --embedded: downloads pre-built Qdrant storage (use with search --storage,
-                        instant queries, no embedding step required).
+    By default downloads both:
+      - doc-chunks-{ver}.jsonl  (use with: search --chunks)
+      - storage-{ver}/          (use with: search --storage or --vtk-version, instant queries)
+
+    Use --no-chunks or --no-embedded to skip one of them.
     """
     try:
         from ..artifact.fetcher import fetch_embedded_storage, fetch_from_ghcr
@@ -417,15 +417,15 @@ def download(
 
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
-        if embedded:
+        if not no_chunks:
+            chunks_path = fetch_from_ghcr(vtk_version, repository=repository, cache_dir=output_dir)
+            typer.echo(f"Downloaded doc-chunks to {chunks_path}")
+        if not no_embedded:
             storage_path = fetch_embedded_storage(
                 vtk_version, repository=repository, cache_dir=output_dir
             )
             typer.echo(f"Downloaded embedded storage to {storage_path}")
-            typer.echo(f"Search with: vtk-index search --storage {storage_path} <query>")
-        else:
-            cache_path = fetch_from_ghcr(vtk_version, repository=repository, cache_dir=output_dir)
-            typer.echo(f"Downloaded doc-chunks to {cache_path}")
+            typer.echo(f"Search with: vtk-index search --vtk-version {vtk_version} <query>")
     except RuntimeError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
