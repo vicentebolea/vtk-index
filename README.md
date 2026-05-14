@@ -19,19 +19,21 @@ Each layer only depends on layers below it.
 
 ## Install
 
-`vtk-index` is not yet on PyPI. Install from GitHub using uv:
+`vtk-index` is not yet on PyPI.
 
-```bash
-uv add "vtk-index @ git+https://github.com/vicentebolea/vtk-index.git"
-```
+### In an external project (consuming vtk-index)
 
 Because `vtk-index` depends on `vtk-knowledge` (also not on PyPI), declare
-both git sources in your `pyproject.toml`:
+both as git sources in your `pyproject.toml` before adding:
 
 ```toml
 [tool.uv.sources]
 vtk-knowledge = {git = "https://github.com/vicentebolea/vtk-knowledge.git"}
 vtk-index     = {git = "https://github.com/vicentebolea/vtk-index.git"}
+```
+
+```bash
+uv add vtk-index
 ```
 
 With pip:
@@ -41,7 +43,7 @@ pip install "vtk-knowledge @ git+https://github.com/vicentebolea/vtk-knowledge.g
 pip install "vtk-index @ git+https://github.com/vicentebolea/vtk-index.git"
 ```
 
-For development:
+### For development on vtk-index itself
 
 ```bash
 git clone https://github.com/vicentebolea/vtk-index
