@@ -29,11 +29,22 @@ def chunk(
     knowledge_artifact: Path = typer.Argument(..., help="Path to vtk-knowledge JSONL artifact."),
     output_dir: Path = typer.Option(Path("."), "--output-dir", "-o"),
     vtk_version: str = typer.Option("", "--vtk-version"),
+    with_code: bool = typer.Option(
+        False,
+        "--with-code",
+        help="Also chunk the VTK Examples repo into code-chunks.jsonl.",
+    ),
+    examples_dir: Path = typer.Option(
+        None,
+        "--examples-dir",
+        help="Local vtk-examples src/Python directory (skips fetching). Implies --with-code.",
+    ),
 ) -> None:
-    """Chunk a knowledge JSONL into doc-chunks and code-chunks."""
+    """Chunk a knowledge JSONL into doc-chunks and (optionally) code-chunks."""
     try:
         from vtk_knowledge import VTKAPIIndex
 
+        from ..chunking.code_chunker import chunk_code_file
         from ..chunking.doc_chunker import chunk_record
     except ImportError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -54,6 +65,27 @@ def chunk(
                 f.write(json.dumps(c) + "\n")
 
         typer.echo(f"Wrote {len(doc_chunks)} doc chunks to {doc_out}")
+
+        if with_code or examples_dir is not None:
+            python_dir = examples_dir
+            if python_dir is None:
+                from ..artifact.examples_fetcher import fetch_vtk_examples
+
+                typer.echo("Fetching VTK Examples ...", err=True)
+                python_dir = fetch_vtk_examples()
+
+            code_chunks = []
+            for py_file in sorted(python_dir.rglob("*.py")):
+                source = py_file.read_text(errors="ignore")
+                for c in chunk_code_file(source, str(py_file), vtk_version):
+                    code_chunks.append(c.model_dump())
+
+            code_out = output_dir / "code-chunks.jsonl"
+            with open(code_out, "w") as f:
+                for c in code_chunks:
+                    f.write(json.dumps(c) + "\n")
+
+            typer.echo(f"Wrote {len(code_chunks)} code chunks to {code_out}")
     except Exception as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)

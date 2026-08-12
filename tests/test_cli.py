@@ -98,6 +98,58 @@ class TestChunkCommand:
             result = runner.invoke(app, ["chunk", str(jsonl)])
         assert result.exit_code != 0
 
+    def test_no_code_chunks_by_default(self, tmp_path):
+        jsonl = _make_jsonl(tmp_path, [_minimal_record()])
+        out = tmp_path / "out"
+        result = runner.invoke(app, ["chunk", str(jsonl), "--output-dir", str(out)])
+        assert result.exit_code == 0
+        assert not (out / "code-chunks.jsonl").exists()
+
+    def test_examples_dir_produces_code_chunks(self, tmp_path):
+        jsonl = _make_jsonl(tmp_path, [_minimal_record()])
+        examples_dir = tmp_path / "examples"
+        examples_dir.mkdir()
+        (examples_dir / "Sphere.py").write_text(
+            "import vtk\nsource = vtk.vtkSphereSource()\nsource.Update()\n"
+        )
+        out = tmp_path / "out"
+        result = runner.invoke(
+            app,
+            [
+                "chunk",
+                str(jsonl),
+                "--output-dir",
+                str(out),
+                "--examples-dir",
+                str(examples_dir),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        code_out = out / "code-chunks.jsonl"
+        assert code_out.exists()
+        lines = [ln for ln in code_out.read_text().splitlines() if ln.strip()]
+        assert len(lines) >= 1
+        obj = json.loads(lines[0])
+        assert obj["chunk_type"] in ("pipeline_example", "query_example")
+        assert obj["source"] == "examples"
+
+    def test_with_code_flag_fetches_examples(self, tmp_path):
+        jsonl = _make_jsonl(tmp_path, [_minimal_record()])
+        fetched_dir = tmp_path / "fetched"
+        fetched_dir.mkdir()
+        (fetched_dir / "Cone.py").write_text("import vtk\n")
+        out = tmp_path / "out"
+        with patch(
+            "vtk_index.artifact.examples_fetcher.fetch_vtk_examples",
+            return_value=fetched_dir,
+        ) as mock_fetch:
+            result = runner.invoke(
+                app, ["chunk", str(jsonl), "--output-dir", str(out), "--with-code"]
+            )
+        assert result.exit_code == 0, result.output
+        mock_fetch.assert_called_once()
+        assert (out / "code-chunks.jsonl").exists()
+
 
 class TestSnapshotCommand:
     def test_qdrant_connection_error_exits_nonzero(self):

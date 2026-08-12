@@ -37,13 +37,20 @@ jobs:
         run: |
           .venv/bin/vtk-index chunk \
             artifacts/vtk-knowledge-${{ inputs.vtk_version }}.jsonl \
-            --output-dir artifacts/
+            --output-dir artifacts/ \
+            --vtk-version ${{ inputs.vtk_version }} \
+            --with-code
 
       - name: Build embedded Qdrant storage
         run: |
           .venv/bin/vtk-index index \
             --doc-chunks artifacts/doc-chunks.jsonl \
+            --code-chunks artifacts/code-chunks.jsonl \
             --path artifacts/storage/
+
+      - name: Verify artifact completeness
+        run: |
+          .venv/bin/python scripts/verify_artifact.py artifacts/storage
 
       - name: Log in to GitHub Container Registry
         run: |
